@@ -7,6 +7,7 @@ use oo7;
 use anyhow::{Result, Context, anyhow};
 
 use serde::Deserialize;
+use notify_rust::Notification;
 
 #[derive(Default, Debug)]
 struct Secrets {
@@ -23,15 +24,16 @@ struct AppState<'a> {
 #[derive(Deserialize, Debug)]
 struct POOCAPIResponse {
     status: i32,
-    request: String,
+    request: Option<String>,
     errors: Option<Vec<String>>,
     totp: Option<String>,
     email: Option<String>,
     secret: Option<String>,
     id: Option<String>,
+    messages: Option<Vec<POMessage>>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Default)]
 struct POMessage {
     id: i64,
     umid: i64,
@@ -40,15 +42,15 @@ struct POMessage {
     app: String,
     icon: String,
     date: i64,
-    queued_date: i64,
+    queued_date: Option<i64>,
     dispatched_date: i64,
     priority: i32,
-    sound: String,
-    url: String,
-    url_title: String,
+    sound: Option<String>,
+    url: Option<String>,
+    url_title: Option<String>,
     acked: i32,
-    receipt: i32,
-    html: i32,
+    receipt: Option<i32>,
+    html: Option<i32>,
 }
 
 async fn prompt_user_password() -> Result<(String, String)> {
@@ -164,6 +166,20 @@ async fn store_secrets(state: &AppState<'_>, secrets: &Secrets) -> Result<()> {
     Ok(())
 }
 
+async fn download_messages(state: &AppState<'_>) -> Result<Option<Vec<POMessage>>> {
+    let download_url = "https://api.pushover.net/1/messages.json";
+    let mut params = HashMap::new();
+    let client = &state.client;
+    let secrets = &state.secrets.context("Could not load secret from storage")?;
+    params.insert("secret", &secrets.secret);
+    params.insert("device_id", &secrets.device_id);
+    let res = client.get(download_url).form(&params).send().await?;
+    println!("Response: {:?}", res);
+    let json: POOCAPIResponse = res.json().await?;
+    println!("Json: {:?}", json);
+    return Ok(json.messages);
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
 
@@ -188,6 +204,18 @@ async fn main() -> Result<()> {
     }
 
     state.secrets = Some(&secrets);
+
+    let messages = download_messages(&state).await?;
+    println!("Messages: {:?}", messages);
+    match messages {
+        Some(mut m) => {
+            while let Some(message) = m.pop() {
+                Notification::new().summary(&message.title)
+                                   .body(&message.message).show()?;
+            }
+        },
+        None => {},
+    }
 
     Ok(())
 }
