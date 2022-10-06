@@ -24,10 +24,6 @@ struct AppState<'a> {
 #[derive(Deserialize, Debug)]
 struct POOCAPIResponse {
     status: i32,
-    request: Option<String>,
-    errors: Option<Vec<String>>,
-    totp: Option<String>,
-    email: Option<String>,
     secret: Option<String>,
     id: Option<String>,
     messages: Option<Vec<POMessage>>,
@@ -36,21 +32,8 @@ struct POOCAPIResponse {
 #[derive(Deserialize, Debug, Default)]
 struct POMessage {
     id: i64,
-    umid: i64,
     title: String,
     message: String,
-    app: String,
-    icon: String,
-    date: i64,
-    queued_date: Option<i64>,
-    dispatched_date: i64,
-    priority: i32,
-    sound: Option<String>,
-    url: Option<String>,
-    url_title: Option<String>,
-    acked: i32,
-    receipt: Option<i32>,
-    html: Option<i32>,
 }
 
 async fn prompt_user_password() -> Result<(String, String)> {
