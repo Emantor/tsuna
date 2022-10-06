@@ -4,6 +4,8 @@ use rpassword::prompt_password;
 use reqwest;
 use oo7;
 
+use std::io::Write;
+
 extern crate clap;
 use clap::{Parser, Subcommand};
 
@@ -57,7 +59,8 @@ struct POMessage {
 }
 
 async fn prompt_user_password() -> Result<(String, String)> {
-    println!("Username:");
+    print!("Username:");
+    std::io::stdout().flush()?;
     let mut line = String::new();
     std::io::stdin().read_line(&mut line)?;
     line = line.strip_suffix("\n").context("Couldn't strip newline from input, no input?")?.to_string();
@@ -75,7 +78,6 @@ impl AppState<'_> {
         let login_url = "https://api.pushover.net/1/users/login.json";
         let client = &self.client;
         let req = client.post(login_url).form(&params);
-        println!("Sending request: {:?}", req);
         let res = req.send().await?;
         let status = res.status();
         let json: POOCAPIResponse = res.json().await?;
@@ -83,7 +85,8 @@ impl AppState<'_> {
             reqwest::StatusCode::PRECONDITION_FAILED => {
                 assert!(json.status == 0);
                 let mut token = String::new();
-                println!("2FA Token:");
+                print!("2FA Token:");
+                std::io::stdout().flush()?;
                 std::io::stdin().read_line(&mut token)?;
                 token = token.strip_suffix("\n").context("Couldn't strip newline from input, no input?")?.to_string();
                 params.insert("twofa", token);
@@ -92,7 +95,6 @@ impl AppState<'_> {
                 let json: POOCAPIResponse = res.json().await?;
                 match status {
                     reqwest::StatusCode::OK => {
-                        println!("debug: Json: {:?}", json);
                         Ok(json.secret.unwrap())
                     }
                     _ => return Err(anyhow!("Unhandled status code from Open Client API"))
