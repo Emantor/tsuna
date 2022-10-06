@@ -133,7 +133,11 @@ impl AppState<'_> {
         println!("Response: {:?}", res);
         let json: POOCAPIResponse = res.json().await?;
         assert!(json.status == 1);
-        return Ok(json.messages);
+        let messages = json.messages.context("Messages Key not found in API response")?;
+        match messages.len() {
+            0 => return Ok(None),
+            _ => return Ok(Some(messages)),
+        }
     }
 }
 
