@@ -139,6 +139,24 @@ impl AppState<'_> {
             _ => return Ok(Some(messages)),
         }
     }
+
+    async fn delete_messages(&self, messages: &Vec<POMessage>) -> Result<()> {
+        let device_id = &self.secrets.context("Could not retrieve secrets from storage")?.device_id;
+        let delete_url = format!("https://api.pushover.net/1/devices/{device_id}/update_highest_message.json");
+        let mut params = HashMap::new();
+        let client = &self.client;
+        let secrets = &self.secrets.context("Could not load secret from storage")?;
+        let max = messages.iter().fold(0, |max, x| if x.id > max { return x.id } else { max }).to_string();
+
+        params.insert("secret", &secrets.secret);
+        params.insert("message", &max);
+
+        let res = client.post(delete_url).form(&params).send().await?;
+        let json: POOCAPIResponse = res.json().await?;
+        assert!(json.status == 1);
+
+        return Ok(());
+    }
 }
 
 impl Secrets {
@@ -207,6 +225,11 @@ async fn main() -> Result<()> {
 
     let messages = state.download_messages().await?;
     println!("Messages: {:?}", messages);
+
+    if let Some(m) = &messages {
+        state.delete_messages(m).await?;
+    }
+
     match messages {
         Some(mut m) => {
             while let Some(message) = m.pop() {
