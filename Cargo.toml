@@ -9,7 +9,7 @@ edition = "2021"
 tokio = { version = "1", features = ["full"] }
 zbus = { version = "3", default-features = false, features = ["tokio"] }
 notify-rust = "4"
-clap = "4"
+clap = { version = "4", features = ["derive"] }
 reqwest = { default-features = false, version = "0.11", features = [ "native-tls", "gzip", "json" ] }
 websocket = { version = "0.26", default-features = false, features = [ "async-ssl" ] }
 rpassword = "7.0"

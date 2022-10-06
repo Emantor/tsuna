@@ -4,6 +4,26 @@ use rpassword::prompt_password;
 use reqwest;
 use oo7;
 
+extern crate clap;
+use clap::{Parser, Subcommand};
+
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Cli {
+    #[command(subcommand)]
+    command: Commands,
+}
+
+#[derive(Debug, Subcommand, PartialEq)]
+enum Commands {
+    /// Register as a new device with pushover
+    Register,
+    /// Delete existing credentials
+    Delete,
+    /// Download and delete messages
+    Download,
+}
+
 use anyhow::{Result, Context, anyhow};
 
 use serde::Deserialize;
@@ -176,17 +196,32 @@ impl Secrets {
         Ok(Some(std::str::from_utf8(items[0].secret().await?.as_slice())?.to_string()))
     }
 
-    async fn store_secrets(&self, secrets: &Secrets) -> Result<()> {
+    async fn store_secrets(&self) -> Result<()> {
         let mut attributes = HashMap::new();
         attributes.insert("application", "tsuna");
         attributes.insert("type", "secret");
 
-        self.keyring.create_item("Tsuna secret", attributes, secrets.secret.as_bytes(), true).await?;
+        self.keyring.create_item("Tsuna secret", attributes, self.secret.as_bytes(), true).await?;
         let mut attributes = HashMap::new();
         attributes.insert("application", "tsuna");
         attributes.insert("type", "device_id");
-        self.keyring.create_item("Tsuna device_id", attributes, secrets.device_id.as_bytes(), true).await?;
+        self.keyring.create_item("Tsuna device_id", attributes, self.device_id.as_bytes(), true).await?;
 
+        Ok(())
+    }
+
+    async fn delete_secrets(&self) -> Result<()> {
+        let mut attributes = HashMap::new();
+        attributes.insert("application", "tsuna");
+        attributes.insert("type", "secret");
+
+        self.keyring.delete(attributes).await?;
+
+        let mut attributes = HashMap::new();
+        attributes.insert("application", "tsuna");
+        attributes.insert("type", "device_id");
+
+        self.keyring.delete(attributes).await?;
         Ok(())
     }
 
@@ -202,6 +237,8 @@ impl Secrets {
 #[tokio::main]
 async fn main() -> Result<()> {
 
+    let args = Cli::parse();
+
     let mut secrets = Secrets::new().await?;
 
     let mut state = AppState {
@@ -209,36 +246,59 @@ async fn main() -> Result<()> {
         secrets: None,
     };
 
+    if args.command == Commands::Register {
+            let sec_opt = secrets.get_secret_available("secret").await?;
+            let dev_opt = secrets.get_secret_available("device_id").await?;
+            if sec_opt != None || dev_opt != None {
+                print!("Device already registered, please explictly delete with 'delete'");
+                return Ok(());
+            }
+            secrets.secret = state.login().await?;
+            secrets.device_id = state.register_device(&&secrets.secret).await?;
+            secrets.store_secrets().await?;
+            return Ok(());
+    }
+
     let sec_opt = secrets.get_secret_available("secret").await?;
     let dev_opt = secrets.get_secret_available("device_id").await?;
 
     if sec_opt == None || dev_opt == None {
-        secrets.secret = state.login().await?;
-        secrets.device_id = state.register_device(&&secrets.secret).await?;
-        secrets.store_secrets(&secrets).await?;
+        println!("Please use the register command to register the device first.");
+        return Ok(());
     } else {
         secrets.secret = sec_opt.unwrap();
         secrets.device_id = dev_opt.unwrap();
     }
-
     state.secrets = Some(&secrets);
 
-    let messages = state.download_messages().await?;
-    println!("Messages: {:?}", messages);
-
-    if let Some(m) = &messages {
-        state.delete_messages(m).await?;
-    }
-
-    match messages {
-        Some(mut m) => {
-            while let Some(message) = m.pop() {
-                Notification::new().summary(&message.title)
-                                   .body(&message.message).show()?;
-            }
+    match args.command {
+        Commands::Delete => {
+            return secrets.delete_secrets().await;
         },
-        None => {},
+        Commands::Download => {
+
+            let messages = state.download_messages().await?;
+
+            match messages {
+                Some(ref m) => {
+                    for message in m {
+                        Notification::new().summary(&message.title)
+                                           .body(&message.message).show()?;
+                    }
+                },
+                None => {},
+            }
+
+            if let Some(m) = &messages {
+                state.delete_messages(m).await?;
+            }
+
+
+            Ok(())
+        },
+        Commands::Register => return Ok(()),
+
     }
 
-    Ok(())
+
 }
