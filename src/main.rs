@@ -9,6 +9,13 @@ use std::io::Write;
 extern crate clap;
 use clap::{Parser, Subcommand};
 
+static APP_USER_AGENT: &str = concat!(
+    env!("CARGO_PKG_NAME"),
+    "/",
+    env!("CARGO_PKG_VERSION"),
+    " (github.com/Emantor/tsuna)"
+);
+
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Cli {
@@ -244,7 +251,7 @@ async fn main() -> Result<()> {
     let mut secrets = Secrets::new().await?;
 
     let mut state = AppState {
-        client: reqwest::Client::new(),
+        client: reqwest::Client::builder().user_agent(APP_USER_AGENT).build()?,
         secrets: None,
     };
 
