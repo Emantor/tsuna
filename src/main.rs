@@ -197,7 +197,7 @@ impl Secrets {
             .search_items(attributes)
             .await?;
 
-        if items.len() == 0 {
+        if items.is_empty() {
             return Ok(None);
         }
         Ok(Some(std::str::from_utf8(items[0].secret().await?.as_slice())?.to_string()))
