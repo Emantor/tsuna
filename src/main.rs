@@ -1,8 +1,6 @@
 use std::collections::HashMap;
 
 use rpassword::prompt_password;
-use reqwest;
-use oo7;
 
 use std::io::Write;
 
