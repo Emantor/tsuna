@@ -286,7 +286,7 @@ async fn main() -> Result<()> {
     if args.command == Commands::Register {
         let sec_opt = secrets.get_secret_available("secret").await?;
         let dev_opt = secrets.get_secret_available("device_id").await?;
-        if sec_opt != None || dev_opt != None {
+        if sec_opt.is_some() || dev_opt.is_some() {
             print!("Device already registered, please explictly delete with 'delete'");
             return Ok(());
         }
@@ -299,7 +299,7 @@ async fn main() -> Result<()> {
     let sec_opt = secrets.get_secret_available("secret").await?;
     let dev_opt = secrets.get_secret_available("device_id").await?;
 
-    if sec_opt == None || dev_opt == None {
+    if sec_opt.is_none() || dev_opt.is_none() {
         println!("Please use the register command to register the device first.");
         return Ok(());
     } else {
