@@ -261,7 +261,7 @@ async fn main() -> Result<()> {
                 return Ok(());
             }
             secrets.secret = state.login().await?;
-            secrets.device_id = state.register_device(&&secrets.secret).await?;
+            secrets.device_id = state.register_device(&secrets.secret).await?;
             secrets.store_secrets().await?;
             return Ok(());
     }
