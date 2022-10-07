@@ -68,7 +68,7 @@ async fn prompt_user_password() -> Result<(String, String)> {
     std::io::stdout().flush()?;
     let mut line = String::new();
     std::io::stdin().read_line(&mut line)?;
-    line = line.strip_suffix("\n").context("Couldn't strip newline from input, no input?")?.to_string();
+    line = line.strip_suffix('\n').context("Couldn't strip newline from input, no input?")?.to_string();
     let password = prompt_password("Password: ")?;
     Ok((line, password))
 }
@@ -93,7 +93,7 @@ impl AppState<'_> {
                 print!("2FA Token:");
                 std::io::stdout().flush()?;
                 std::io::stdin().read_line(&mut token)?;
-                token = token.strip_suffix("\n").context("Couldn't strip newline from input, no input?")?.to_string();
+                token = token.strip_suffix('\n').context("Couldn't strip newline from input, no input?")?.to_string();
                 params.insert("twofa", token);
                 let res = client.post(login_url).form(&params).send().await?;
                 let status = res.status();
@@ -127,7 +127,7 @@ impl AppState<'_> {
         println!("Device name:");
         let mut name = String::new();
         std::io::stdin().read_line(&mut name)?;
-        name = name.strip_suffix("\n").context("Couldn't strip newline from input, no input?")?.to_string();
+        name = name.strip_suffix('\n').context("Couldn't strip newline from input, no input?")?.to_string();
 
         params.insert("name", name);
 
