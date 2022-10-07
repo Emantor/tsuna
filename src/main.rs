@@ -299,12 +299,12 @@ async fn main() -> Result<()> {
     let sec_opt = secrets.get_secret_available("secret").await?;
     let dev_opt = secrets.get_secret_available("device_id").await?;
 
-    if sec_opt.is_none() || dev_opt.is_none() {
+    if let (Some(sec_opt), Some(dev_opt)) = (sec_opt, dev_opt) {
+        secrets.secret = sec_opt;
+        secrets.device_id = dev_opt;
+    } else {
         println!("Please use the register command to register the device first.");
         return Ok(());
-    } else {
-        secrets.secret = sec_opt.unwrap();
-        secrets.device_id = dev_opt.unwrap();
     }
     state.secrets = Some(&secrets);
 
