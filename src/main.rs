@@ -102,7 +102,7 @@ impl AppState<'_> {
                     reqwest::StatusCode::OK => {
                         Ok(json.secret.unwrap())
                     }
-                    _ => return Err(anyhow!("Unhandled status code from Open Client API"))
+                    _ => Err(anyhow!("Unhandled status code from Open Client API"))
                 }
             }
             reqwest::StatusCode::OK => {
@@ -111,7 +111,7 @@ impl AppState<'_> {
             }
             _ => {
                 assert!(json.status == 0);
-                return Err(anyhow!("Unhandled status code from Open Client API: {:?}", json))
+                Err(anyhow!("Unhandled status code from Open Client API: {:?}", json))
             }
         }
     }
@@ -143,7 +143,7 @@ impl AppState<'_> {
             }
             _ => {
                 assert!(json.status == 0);
-                return Err(anyhow!("Unhandled status code from Open Client API: {:?}", json))
+                Err(anyhow!("Unhandled status code from Open Client API: {:?}", json))
             }
         }
     }
@@ -162,8 +162,8 @@ impl AppState<'_> {
         assert!(json.status == 1);
         let messages = json.messages.context("Messages Key not found in API response")?;
         match messages.len() {
-            0 => return Ok(None),
-            _ => return Ok(Some(messages)),
+            0 => Ok(None),
+            _ => Ok(Some(messages)),
         }
     }
 
@@ -173,7 +173,7 @@ impl AppState<'_> {
         let mut params = HashMap::new();
         let client = &self.client;
         let secrets = &self.secrets.context("Could not load secret from storage")?;
-        let max = messages.iter().fold(0, |max, x| if x.id > max { return x.id } else { max }).to_string();
+        let max = messages.iter().fold(0, |max, x| if x.id > max { x.id } else { max }).to_string();
 
         params.insert("secret", &secrets.secret);
         params.insert("message", &max);
@@ -182,7 +182,7 @@ impl AppState<'_> {
         let json: POOCAPIResponse = res.json().await?;
         assert!(json.status == 1);
 
-        return Ok(());
+        Ok(())
     }
 }
 
@@ -233,7 +233,7 @@ impl Secrets {
     }
 
     async fn new() -> Result<Self> {
-        return Ok(Self {
+        Ok(Self {
             keyring: oo7::Keyring::new().await?,
             secret: String::default(),
             device_id: String::default(),
@@ -280,7 +280,7 @@ async fn main() -> Result<()> {
 
     match args.command {
         Commands::Delete => {
-            return secrets.delete_secrets().await;
+            secrets.delete_secrets().await
         },
         Commands::Download => {
 
@@ -303,7 +303,7 @@ async fn main() -> Result<()> {
 
             Ok(())
         },
-        Commands::Register => return Ok(()),
+        Commands::Register => Ok(()),
 
     }
 
