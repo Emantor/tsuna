@@ -139,7 +139,7 @@ impl AppState<'_> {
         match status {
             reqwest::StatusCode::OK => {
                 assert!(json.status == 1);
-                Ok(json.id.unwrap().to_string())
+                Ok(json.id.unwrap())
             }
             _ => {
                 assert!(json.status == 0);
