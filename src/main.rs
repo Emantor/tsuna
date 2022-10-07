@@ -167,7 +167,7 @@ impl AppState<'_> {
         }
     }
 
-    async fn delete_messages(&self, messages: &Vec<POMessage>) -> Result<()> {
+    async fn delete_messages(&self, messages: &[POMessage]) -> Result<()> {
         let device_id = &self.secrets.context("Could not retrieve secrets from storage")?.device_id;
         let delete_url = format!("https://api.pushover.net/1/devices/{device_id}/update_highest_message.json");
         let mut params = HashMap::new();
