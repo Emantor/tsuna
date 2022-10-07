@@ -286,7 +286,7 @@ async fn main() -> Result<()> {
     if args.command == Commands::Register {
         let sec_opt = secrets.get_secret_available("secret").await?;
         let dev_opt = secrets.get_secret_available("device_id").await?;
-        if sec_opt != None || dev_opt != None {
+        if sec_opt.is_some() || dev_opt.is_some() {
             print!("Device already registered, please explictly delete with 'delete'");
             return Ok(());
         }
@@ -299,12 +299,12 @@ async fn main() -> Result<()> {
     let sec_opt = secrets.get_secret_available("secret").await?;
     let dev_opt = secrets.get_secret_available("device_id").await?;
 
-    if sec_opt == None || dev_opt == None {
+    if let (Some(sec_opt), Some(dev_opt)) = (sec_opt, dev_opt) {
+        secrets.secret = sec_opt;
+        secrets.device_id = dev_opt;
+    } else {
         println!("Please use the register command to register the device first.");
         return Ok(());
-    } else {
-        secrets.secret = sec_opt.unwrap();
-        secrets.device_id = dev_opt.unwrap();
     }
     state.secrets = Some(&secrets);
 
@@ -313,19 +313,13 @@ async fn main() -> Result<()> {
         Commands::Download => {
             let messages = state.download_messages().await?;
 
-            match messages {
-                Some(ref m) => {
-                    for message in m {
-                        Notification::new()
-                            .summary(&message.title)
-                            .body(&message.message)
-                            .show()?;
-                    }
-                }
-                None => {}
-            }
-
             if let Some(m) = &messages {
+                for message in m {
+                    Notification::new()
+                        .summary(&message.title)
+                        .body(&message.message)
+                        .show()?;
+                }
                 state.delete_messages(m).await?;
             }
 
