@@ -313,19 +313,13 @@ async fn main() -> Result<()> {
         Commands::Download => {
             let messages = state.download_messages().await?;
 
-            match messages {
-                Some(ref m) => {
-                    for message in m {
-                        Notification::new()
-                            .summary(&message.title)
-                            .body(&message.message)
-                            .show()?;
-                    }
-                }
-                None => {}
-            }
-
             if let Some(m) = &messages {
+                for message in m {
+                    Notification::new()
+                        .summary(&message.title)
+                        .body(&message.message)
+                        .show()?;
+                }
                 state.delete_messages(m).await?;
             }
 
