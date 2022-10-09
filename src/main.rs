@@ -7,6 +7,10 @@ use std::io::Write;
 extern crate clap;
 use clap::{Parser, Subcommand};
 
+use async_tungstenite::tokio::connect_async;
+use async_tungstenite::tungstenite::protocol::Message;
+use futures::prelude::*;
+
 static APP_USER_AGENT: &str = concat!(
     env!("CARGO_PKG_NAME"),
     "/",
@@ -29,6 +33,8 @@ enum Commands {
     Delete,
     /// Download and delete messages
     Download,
+    /// Start a Websocket and loop until canceled
+    Loop,
 }
 
 use anyhow::{anyhow, Context, Result};
@@ -169,7 +175,6 @@ impl AppState<'_> {
         params.insert("secret", &secrets.secret);
         params.insert("device_id", &secrets.device_id);
         let res = client.get(download_url).form(&params).send().await?;
-        println!("Response: {:?}", res);
         let json: POOCAPIResponse = res.json().await?;
         assert!(json.status == 1);
         let messages = json
@@ -270,6 +275,52 @@ impl Secrets {
     }
 }
 
+const WS_URL: &str = "wss://client.pushover.net/push";
+
+async fn inner_loop(state: &AppState<'_>) -> Result<()> {
+    let (mut ws_stream, _) = connect_async(WS_URL).await?;
+    let secrets = state.secrets.context("No secrets loaded from backend")?;
+    let login_text = format!("login:{}:{}\n", secrets.device_id, secrets.secret);
+
+    ws_stream.send(Message::Text(login_text)).await?;
+
+    let (_write, mut read) = ws_stream.split();
+
+    loop {
+        let message = read.next().await.unwrap()?;
+        let text = message.to_text()?;
+        match text {
+            "!" => {
+                let messages = state.download_messages().await?;
+
+                if let Some(m) = &messages {
+                    for message in m {
+                        Notification::new()
+                            .summary(&message.title)
+                            .body(&message.message)
+                            .show()?;
+                    }
+                    state.delete_messages(m).await?;
+                }
+            }
+            "E" => {
+                println!("Error");
+            }
+            "A" => {
+                println!("Abort");
+            }
+            "#" => {
+                println!("Keepalive");
+            }
+            _ => {}
+        }
+    }
+}
+
+async fn run_loop(state: &AppState<'_>) -> Result<()> {
+    inner_loop(state).await
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Cli::parse();
@@ -326,5 +377,6 @@ async fn main() -> Result<()> {
             Ok(())
         }
         Commands::Register => Ok(()),
+        Commands::Loop => run_loop(&state).await,
     }
 }
