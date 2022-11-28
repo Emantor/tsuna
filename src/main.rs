@@ -1,6 +1,7 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Duration};
 
 use rpassword::prompt_password;
+use tokio::time::error::Elapsed;
 
 use std::io::Write;
 
@@ -10,6 +11,7 @@ use clap::{Parser, Subcommand};
 use async_tungstenite::tokio::connect_async;
 use async_tungstenite::tungstenite::protocol::Message;
 use futures::prelude::*;
+use tokio::time::{timeout, sleep};
 
 static APP_USER_AGENT: &str = concat!(
     env!("CARGO_PKG_NAME"),
@@ -52,6 +54,7 @@ struct Secrets {
 struct AppState<'a> {
     client: reqwest::Client,
     secrets: Option<&'a Secrets>,
+    backoff_time: Duration,
 }
 
 #[derive(Deserialize, Debug)]
@@ -210,6 +213,16 @@ impl AppState<'_> {
 
         Ok(())
     }
+
+    fn increment_backoff(&mut self) -> () {
+        if self.backoff_time.as_secs() < 60 {
+            self.backoff_time += Duration::from_secs(10);
+        }
+    }
+
+    fn reset_backoff(&mut self) -> () {
+        self.backoff_time = Duration::from_secs(10);
+    }
 }
 
 impl Secrets {
@@ -277,17 +290,19 @@ impl Secrets {
 
 const WS_URL: &str = "wss://client.pushover.net/push";
 
-async fn inner_loop(state: &AppState<'_>) -> Result<()> {
+async fn inner_loop(state: &mut AppState<'_>) -> Result<()> {
     let (mut ws_stream, _) = connect_async(WS_URL).await?;
     let secrets = state.secrets.context("No secrets loaded from backend")?;
     let login_text = format!("login:{}:{}\n", secrets.device_id, secrets.secret);
 
     ws_stream.send(Message::Text(login_text)).await?;
 
+    state.reset_backoff();
+
     let (_write, mut read) = ws_stream.split();
 
     loop {
-        let message = read.next().await.unwrap()?;
+        let message = timeout(std::time::Duration::from_secs(95), read.next()).await?.unwrap()?;
         let text = message.to_text()?;
         match text {
             "!" => {
@@ -310,15 +325,29 @@ async fn inner_loop(state: &AppState<'_>) -> Result<()> {
                 println!("Abort");
             }
             "#" => {
-                println!("Keepalive");
+                println!("[{:?}], Keepalive", std::time::SystemTime::now());
             }
             _ => {}
         }
     }
 }
 
-async fn run_loop(state: &AppState<'_>) -> Result<()> {
-    inner_loop(state).await
+async fn run_loop(state: &mut AppState<'_>) -> Result<()> {
+    loop{
+        match inner_loop(state).await {
+            Err(ref e) if e.is::<Elapsed>() => {
+                println!("Read timeout, restarting loop");
+                continue
+            },
+            Err(ref e) if e.is::<std::io::Error>() => {
+                sleep(state.backoff_time).await;
+                state.increment_backoff();
+                continue
+            },
+            Ok(o) => return Ok(o),
+            Err(e) => return Err(e),
+        };
+    }
 }
 
 #[tokio::main]
@@ -332,6 +361,7 @@ async fn main() -> Result<()> {
             .user_agent(APP_USER_AGENT)
             .build()?,
         secrets: None,
+        backoff_time: Duration::from_secs(10)
     };
 
     if args.command == Commands::Register {
@@ -377,6 +407,6 @@ async fn main() -> Result<()> {
             Ok(())
         }
         Commands::Register => Ok(()),
-        Commands::Loop => run_loop(&state).await,
+        Commands::Loop => run_loop(&mut state).await,
     }
 }
