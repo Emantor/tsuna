@@ -12,6 +12,9 @@ keywords = ["pushover", "client"]
 tokio = { version = "1", features = ["full"] }
 zbus = { version = "3", default-features = false, features = ["tokio"] }
 notify-rust = "4"
+log = "0.4.17"
+env_logger = "0.10.0"
+thiserror = "1.0"
 clap = { version = "4", features = ["derive"] }
 reqwest = { default-features = false, version = "0.11", features = [ "native-tls", "gzip", "json" ] }
 rpassword = "7.0"

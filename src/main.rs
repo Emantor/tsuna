@@ -13,6 +13,8 @@ use async_tungstenite::tungstenite::protocol::Message;
 use futures::prelude::*;
 use tokio::time::{timeout, sleep};
 
+use thiserror::Error;
+
 static APP_USER_AGENT: &str = concat!(
     env!("CARGO_PKG_NAME"),
     "/",
@@ -25,6 +27,14 @@ static APP_USER_AGENT: &str = concat!(
 struct Cli {
     #[command(subcommand)]
     command: Commands,
+}
+
+#[derive(Error, Debug)]
+pub enum TsunaLoopError {
+    #[error("Abort received while connected, re-registration required.")]
+    Abort(),
+    #[error("Generic error, will trigger a reconnection.")]
+    Error(),
 }
 
 #[derive(Debug, Subcommand, PartialEq)]
@@ -151,7 +161,7 @@ impl AppState<'_> {
         params.insert("name", name);
 
         let req = client.post(devices_url).form(&params);
-        println!("Sending request: {:?}", req);
+        log::debug!("Sending request: {:?}", req);
         let res = req.send().await?;
         let status = res.status();
         let json: POOCAPIResponse = res.json().await?;
@@ -319,13 +329,15 @@ async fn inner_loop(state: &mut AppState<'_>) -> Result<()> {
                 }
             }
             "E" => {
-                println!("Error");
+                log::error!("Received an error from upstream, should reconnect");
+                return Err(TsunaLoopError::Error().into())
             }
             "A" => {
-                println!("Abort");
+                log::error!("Abort");
+                return Err(TsunaLoopError::Abort().into())
             }
             "#" => {
-                println!("[{:?}], Keepalive", std::time::SystemTime::now());
+                log::debug!("[{:?}], Keepalive", std::time::SystemTime::now());
             }
             _ => {}
         }
@@ -336,13 +348,17 @@ async fn run_loop(state: &mut AppState<'_>) -> Result<()> {
     loop{
         match inner_loop(state).await {
             Err(ref e) if e.is::<Elapsed>() => {
-                println!("Read timeout, restarting loop");
+                log::debug!("Read timeout, restarting loop");
                 continue
             },
             Err(ref e) if e.is::<std::io::Error>() => {
                 sleep(state.backoff_time).await;
                 state.increment_backoff();
                 continue
+            },
+            Err(e) if e.is::<TsunaLoopError>() => match e.downcast_ref::<TsunaLoopError>().unwrap() {
+                TsunaLoopError::Abort() => return Err(e),
+                TsunaLoopError::Error() => continue
             },
             Ok(o) => return Ok(o),
             Err(e) => return Err(e),
@@ -352,6 +368,7 @@ async fn run_loop(state: &mut AppState<'_>) -> Result<()> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    env_logger::init();
     let args = Cli::parse();
 
     let mut secrets = Secrets::new().await?;
