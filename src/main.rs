@@ -361,7 +361,12 @@ async fn run_loop(state: &mut AppState<'_>) -> Result<()> {
                 TsunaLoopError::Error() => continue
             },
             Ok(o) => return Ok(o),
-            Err(e) => return Err(e),
+            Err(e) => {
+                log::info!("Got unhandled Error: {:?}, continuing", e);
+                sleep(state.backoff_time).await;
+                state.increment_backoff();
+                continue
+            }
         };
     }
 }
