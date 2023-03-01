@@ -323,7 +323,7 @@ async fn inner_loop(state: &mut AppState<'_>) -> Result<()> {
                         Notification::new()
                             .summary(&message.title)
                             .body(&message.message)
-                            .show()?;
+                            .show_async().await?;
                     }
                     state.delete_messages(m).await?;
                 }
@@ -421,7 +421,7 @@ async fn main() -> Result<()> {
                     Notification::new()
                         .summary(&message.title)
                         .body(&message.message)
-                        .show()?;
+                        .show_async().await?;
                 }
                 state.delete_messages(m).await?;
             }
