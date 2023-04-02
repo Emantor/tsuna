@@ -150,7 +150,8 @@ impl AppState<'_> {
         params.insert("secret", secret.to_string());
         params.insert("os", "O".to_string());
 
-        println!("Device name:");
+        print!("Device name:");
+        std::io::stdout().flush()?;
         let mut name = String::new();
         std::io::stdin().read_line(&mut name)?;
         name = name
