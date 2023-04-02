@@ -150,7 +150,8 @@ impl AppState<'_> {
         params.insert("secret", secret.to_string());
         params.insert("os", "O".to_string());
 
-        println!("Device name:");
+        print!("Device name:");
+        std::io::stdout().flush()?;
         let mut name = String::new();
         std::io::stdin().read_line(&mut name)?;
         name = name
@@ -224,13 +225,13 @@ impl AppState<'_> {
         Ok(())
     }
 
-    fn increment_backoff(&mut self) -> () {
+    fn increment_backoff(&mut self) {
         if self.backoff_time.as_secs() < 60 {
             self.backoff_time += Duration::from_secs(10);
         }
     }
 
-    fn reset_backoff(&mut self) -> () {
+    fn reset_backoff(&mut self) {
         self.backoff_time = Duration::from_secs(10);
     }
 }
