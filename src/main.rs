@@ -225,13 +225,13 @@ impl AppState<'_> {
         Ok(())
     }
 
-    fn increment_backoff(&mut self) -> () {
+    fn increment_backoff(&mut self) {
         if self.backoff_time.as_secs() < 60 {
             self.backoff_time += Duration::from_secs(10);
         }
     }
 
-    fn reset_backoff(&mut self) -> () {
+    fn reset_backoff(&mut self) {
         self.backoff_time = Duration::from_secs(10);
     }
 }
