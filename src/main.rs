@@ -1,7 +1,7 @@
 use std::{collections::HashMap, time::Duration};
 
 use rpassword::prompt_password;
-use tokio::time::error::Elapsed;
+use tokio::{io::AsyncWriteExt, time::error::Elapsed};
 
 use std::io::Write;
 
@@ -11,7 +11,7 @@ use clap::{Parser, Subcommand};
 use async_tungstenite::tokio::connect_async;
 use async_tungstenite::tungstenite::protocol::Message;
 use futures::prelude::*;
-use tokio::time::{timeout, sleep};
+use tokio::time::{sleep, timeout};
 
 use thiserror::Error;
 
@@ -65,6 +65,7 @@ struct AppState<'a> {
     client: reqwest::Client,
     secrets: Option<&'a Secrets>,
     backoff_time: Duration,
+    xdg_dirs: xdg::BaseDirectories,
 }
 
 #[derive(Deserialize, Debug)]
@@ -80,6 +81,7 @@ struct POMessage {
     id: i64,
     title: String,
     message: String,
+    icon: String,
 }
 
 async fn prompt_user_password() -> Result<(String, String)> {
@@ -234,6 +236,44 @@ impl AppState<'_> {
     fn reset_backoff(&mut self) {
         self.backoff_time = Duration::from_secs(10);
     }
+
+    async fn get_icon(&self, icon: &str) -> Result<String> {
+        let path = self.xdg_dirs.get_cache_file(format!("{icon}.png"));
+        match path.exists() {
+            true => Ok(path
+                .into_os_string()
+                .into_string()
+                .expect("Path conv failed")),
+            false => self.fetch_icon(icon).await,
+        }
+    }
+
+    async fn fetch_icon(&self, icon: &str) -> Result<String> {
+        let client = &self.client;
+        let icon_url = format!("https://api.pushover.net/icons/{icon}.png");
+        let res = client.get(icon_url).send().await?;
+        assert!(res.status() == 200);
+        let bytes = res.bytes().await?;
+        let cache_name = self
+            .xdg_dirs
+            .place_cache_file(format!("{icon}.png"))
+            .context("Could not create cache directory")?;
+        let mut cache_file = tokio::fs::OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .read(false)
+            .write(true)
+            .open(cache_name.clone())
+            .await?;
+        cache_file.write_all(&bytes).await?;
+
+        let filename = cache_name
+            .into_os_string()
+            .into_string()
+            .expect("Icon conversion failed");
+
+        Ok(filename)
+    }
 }
 
 impl Secrets {
@@ -313,7 +353,9 @@ async fn inner_loop(state: &mut AppState<'_>) -> Result<()> {
     let (_write, mut read) = ws_stream.split();
 
     loop {
-        let message = timeout(std::time::Duration::from_secs(95), read.next()).await?.unwrap()?;
+        let message = timeout(std::time::Duration::from_secs(95), read.next())
+            .await?
+            .unwrap()?;
         let text = message.to_text()?;
         match text {
             "!" => {
@@ -324,18 +366,20 @@ async fn inner_loop(state: &mut AppState<'_>) -> Result<()> {
                         Notification::new()
                             .summary(&message.title)
                             .body(&message.message)
-                            .show_async().await?;
+                            .icon(&state.get_icon(&message.icon).await?)
+                            .show_async()
+                            .await?;
                     }
                     state.delete_messages(m).await?;
                 }
             }
             "E" => {
                 log::error!("Received an error from upstream, should reconnect");
-                return Err(TsunaLoopError::Error().into())
+                return Err(TsunaLoopError::Error().into());
             }
             "A" => {
                 log::error!("Abort");
-                return Err(TsunaLoopError::Abort().into())
+                return Err(TsunaLoopError::Abort().into());
             }
             "#" => {
                 log::debug!("[{:?}], Keepalive", std::time::SystemTime::now());
@@ -346,27 +390,28 @@ async fn inner_loop(state: &mut AppState<'_>) -> Result<()> {
 }
 
 async fn run_loop(state: &mut AppState<'_>) -> Result<()> {
-    loop{
+    loop {
         match inner_loop(state).await {
             Err(ref e) if e.is::<Elapsed>() => {
                 log::debug!("Read timeout, restarting loop");
-                continue
-            },
+                continue;
+            }
             Err(ref e) if e.is::<std::io::Error>() => {
                 sleep(state.backoff_time).await;
                 state.increment_backoff();
-                continue
-            },
-            Err(e) if e.is::<TsunaLoopError>() => match e.downcast_ref::<TsunaLoopError>().unwrap() {
+                continue;
+            }
+            Err(e) if e.is::<TsunaLoopError>() => match e.downcast_ref::<TsunaLoopError>().unwrap()
+            {
                 TsunaLoopError::Abort() => return Err(e),
-                TsunaLoopError::Error() => continue
+                TsunaLoopError::Error() => continue,
             },
             Ok(o) => return Ok(o),
             Err(e) => {
                 log::info!("Got unhandled Error: {:?}, continuing", e);
                 sleep(state.backoff_time).await;
                 state.increment_backoff();
-                continue
+                continue;
             }
         };
     }
@@ -384,7 +429,8 @@ async fn main() -> Result<()> {
             .user_agent(APP_USER_AGENT)
             .build()?,
         secrets: None,
-        backoff_time: Duration::from_secs(10)
+        backoff_time: Duration::from_secs(10),
+        xdg_dirs: xdg::BaseDirectories::with_prefix("tsuna").unwrap(),
     };
 
     if args.command == Commands::Register {
@@ -422,7 +468,9 @@ async fn main() -> Result<()> {
                     Notification::new()
                         .summary(&message.title)
                         .body(&message.message)
-                        .show_async().await?;
+                        .icon(&state.get_icon(&message.icon).await?)
+                        .show_async()
+                        .await?;
                 }
                 state.delete_messages(m).await?;
             }
