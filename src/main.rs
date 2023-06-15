@@ -82,6 +82,7 @@ struct POMessage {
     title: String,
     message: String,
     icon: String,
+    priority: i64,
 }
 
 async fn prompt_user_password() -> Result<(String, String)> {
