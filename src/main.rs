@@ -343,6 +343,11 @@ impl Secrets {
 const WS_URL: &str = "wss://client.pushover.net/push";
 
 async fn display_message(state: &AppState<'_>, message: &POMessage) -> Result<()> {
+    if message.priority < 0 {
+        println!("{}: {}", message.title, message.message);
+        return Ok(())
+    }
+
     Notification::new()
         .summary(&message.title)
         .body(&message.message)
