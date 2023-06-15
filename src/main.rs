@@ -82,6 +82,7 @@ struct POMessage {
     title: String,
     message: String,
     icon: String,
+    priority: i64,
 }
 
 async fn prompt_user_password() -> Result<(String, String)> {
@@ -341,6 +342,21 @@ impl Secrets {
 
 const WS_URL: &str = "wss://client.pushover.net/push";
 
+async fn display_message(state: &AppState<'_>, message: &POMessage) -> Result<()> {
+    if message.priority < 0 {
+        println!("{}: {}", message.title, message.message);
+        return Ok(())
+    }
+
+    Notification::new()
+        .summary(&message.title)
+        .body(&message.message)
+        .icon(&state.get_icon(&message.icon).await?)
+        .show_async()
+        .await?;
+    Ok(())
+}
+
 async fn inner_loop(state: &mut AppState<'_>) -> Result<()> {
     let (mut ws_stream, _) = connect_async(WS_URL).await?;
     let secrets = state.secrets.context("No secrets loaded from backend")?;
@@ -363,12 +379,7 @@ async fn inner_loop(state: &mut AppState<'_>) -> Result<()> {
 
                 if let Some(m) = &messages {
                     for message in m {
-                        Notification::new()
-                            .summary(&message.title)
-                            .body(&message.message)
-                            .icon(&state.get_icon(&message.icon).await?)
-                            .show_async()
-                            .await?;
+                        display_message(state, message).await?;
                     }
                     state.delete_messages(m).await?;
                 }
@@ -465,12 +476,7 @@ async fn main() -> Result<()> {
 
             if let Some(m) = &messages {
                 for message in m {
-                    Notification::new()
-                        .summary(&message.title)
-                        .body(&message.message)
-                        .icon(&state.get_icon(&message.icon).await?)
-                        .show_async()
-                        .await?;
+                    display_message(&state, message).await?;
                 }
                 state.delete_messages(m).await?;
             }
