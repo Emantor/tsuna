@@ -264,7 +264,7 @@ impl AppState<'_> {
             .truncate(false)
             .read(false)
             .write(true)
-            .open(cache_name.clone())
+            .open(&cache_name)
             .await?;
         cache_file.write_all(&bytes).await?;
 
