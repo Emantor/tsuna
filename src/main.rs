@@ -375,13 +375,12 @@ async fn inner_loop(state: &mut AppState<'_>) -> Result<()> {
         let text = message.to_text()?;
         match text {
             "!" => {
-                let messages = state.download_messages().await?;
+                while let Some(m) = state.download_messages().await? {
 
-                if let Some(m) = &messages {
-                    for message in m {
+                    for message in &m {
                         display_message(state, message).await?;
                     }
-                    state.delete_messages(m).await?;
+                    state.delete_messages(&m).await?;
                 }
             }
             "E" => {
