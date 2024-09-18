@@ -283,7 +283,7 @@ impl Secrets {
         attributes.insert("application", "tsuna");
         attributes.insert("type", tos);
 
-        let items = self.keyring.search_items(attributes).await?;
+        let items = self.keyring.search_items(&attributes).await?;
 
         if items.is_empty() {
             return Ok(None);
@@ -299,7 +299,7 @@ impl Secrets {
         attributes.insert("type", "secret");
 
         self.keyring
-            .create_item("Tsuna secret", attributes, self.secret.as_bytes(), true)
+            .create_item("Tsuna secret", &attributes, self.secret.as_bytes(), true)
             .await?;
         let mut attributes = HashMap::new();
         attributes.insert("application", "tsuna");
@@ -307,7 +307,7 @@ impl Secrets {
         self.keyring
             .create_item(
                 "Tsuna device_id",
-                attributes,
+                &attributes,
                 self.device_id.as_bytes(),
                 true,
             )
@@ -321,13 +321,13 @@ impl Secrets {
         attributes.insert("application", "tsuna");
         attributes.insert("type", "secret");
 
-        self.keyring.delete(attributes).await?;
+        self.keyring.delete(&attributes).await?;
 
         let mut attributes = HashMap::new();
         attributes.insert("application", "tsuna");
         attributes.insert("type", "device_id");
 
-        self.keyring.delete(attributes).await?;
+        self.keyring.delete(&attributes).await?;
         Ok(())
     }
 
