@@ -23,7 +23,7 @@ async-tungstenite = { version = "*", features = [ "tokio-native-tls" ] }
 serde_json = "1.0"
 futures = "0.3"
 serde = { version = "1.0", features = ["derive"] }
-oo7 = { version = "0.1.0-beta.2", default-features = false, features = [ "tokio", "native_crypto" ] }
+oo7 = { version = "0.3", default-features = false, features = [ "tokio", "openssl_crypto" ] }
 xdg = "^2.1"
 
 [profile.release]
