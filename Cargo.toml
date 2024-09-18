@@ -10,7 +10,7 @@ keywords = ["pushover", "client"]
 
 [dependencies]
 tokio = { version = "1", features = ["full"] }
-zbus = { version = "3", default-features = false, features = ["tokio"] }
+zbus = { version = "4", default-features = false, features = ["tokio"] }
 notify-rust = { version = "4", features = ["async"] }
 log = "0.4.17"
 env_logger = "0.10.0"
