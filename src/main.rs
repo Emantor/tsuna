@@ -127,13 +127,15 @@ impl AppState<'_> {
                 let status = res.status();
                 let json: POOCAPIResponse = res.json().await?;
                 match status {
-                    reqwest::StatusCode::OK => Ok(json.secret.unwrap()),
+                    reqwest::StatusCode::OK => {
+                        json.secret.ok_or(anyhow!("Secret not found in JSON"))
+                    }
                     _ => Err(anyhow!("Unhandled status code from Open Client API")),
                 }
             }
             reqwest::StatusCode::OK => {
                 assert!(json.status == 1);
-                Ok(json.secret.unwrap())
+                json.secret.ok_or(anyhow!("Secret not found in JSON"))
             }
             _ => {
                 assert!(json.status == 0);
@@ -172,7 +174,7 @@ impl AppState<'_> {
         match status {
             reqwest::StatusCode::OK => {
                 assert!(json.status == 1);
-                Ok(json.id.unwrap())
+                json.id.ok_or(anyhow!("ID not found in JSON"))
             }
             _ => {
                 assert!(json.status == 0);
@@ -345,7 +347,7 @@ const WS_URL: &str = "wss://client.pushover.net/push";
 async fn display_message(state: &AppState<'_>, message: &POMessage) -> Result<()> {
     if message.priority < 0 {
         println!("{}: {}", message.title, message.message);
-        return Ok(())
+        return Ok(());
     }
 
     Notification::new()
@@ -369,32 +371,30 @@ async fn inner_loop(state: &mut AppState<'_>) -> Result<()> {
     let (_write, mut read) = ws_stream.split();
 
     loop {
-        let message = timeout(std::time::Duration::from_secs(95), read.next())
-            .await?
-            .unwrap()?;
-        let text = message.to_text()?;
-        match text {
-            "!" => {
-                while let Some(m) = state.download_messages().await? {
-
-                    for message in &m {
-                        display_message(state, message).await?;
+        if let Some(Ok(message)) = timeout(std::time::Duration::from_secs(95), read.next()).await? {
+            let text = message.to_text()?;
+            match text {
+                "!" => {
+                    while let Some(m) = state.download_messages().await? {
+                        for message in &m {
+                            display_message(state, message).await?;
+                        }
+                        state.delete_messages(&m).await?;
                     }
-                    state.delete_messages(&m).await?;
                 }
+                "E" => {
+                    log::error!("Received an error from upstream, should reconnect");
+                    return Err(TsunaLoopError::Error().into());
+                }
+                "A" => {
+                    log::error!("Abort");
+                    return Err(TsunaLoopError::Abort().into());
+                }
+                "#" => {
+                    log::debug!("[{:?}], Keepalive", std::time::SystemTime::now());
+                }
+                _ => {}
             }
-            "E" => {
-                log::error!("Received an error from upstream, should reconnect");
-                return Err(TsunaLoopError::Error().into());
-            }
-            "A" => {
-                log::error!("Abort");
-                return Err(TsunaLoopError::Abort().into());
-            }
-            "#" => {
-                log::debug!("[{:?}], Keepalive", std::time::SystemTime::now());
-            }
-            _ => {}
         }
     }
 }
@@ -411,10 +411,12 @@ async fn run_loop(state: &mut AppState<'_>) -> Result<()> {
                 state.increment_backoff();
                 continue;
             }
-            Err(e) if e.is::<TsunaLoopError>() => match e.downcast_ref::<TsunaLoopError>().unwrap()
-            {
-                TsunaLoopError::Abort() => return Err(e),
-                TsunaLoopError::Error() => continue,
+            Err(e) if e.is::<TsunaLoopError>() => match e.downcast_ref::<TsunaLoopError>() {
+                Some(inner) => match inner {
+                    TsunaLoopError::Abort() => return Err(e),
+                    TsunaLoopError::Error() => continue,
+                },
+                None => return Err(e),
             },
             Ok(o) => return Ok(o),
             Err(e) => {
@@ -440,7 +442,7 @@ async fn main() -> Result<()> {
             .build()?,
         secrets: None,
         backoff_time: Duration::from_secs(10),
-        xdg_dirs: xdg::BaseDirectories::with_prefix("tsuna").unwrap(),
+        xdg_dirs: xdg::BaseDirectories::with_prefix("tsuna")?,
     };
 
     if args.command == Commands::Register {

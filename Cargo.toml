@@ -24,7 +24,7 @@ serde_json = "1.0"
 futures = "0.3"
 serde = { version = "1.0", features = ["derive"] }
 oo7 = { version = "0.3", default-features = false, features = [ "tokio", "openssl_crypto" ] }
-xdg = "^2.1"
+xdg = "^2"
 
 [profile.release]
 lto = true
