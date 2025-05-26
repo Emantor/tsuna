@@ -79,7 +79,7 @@ struct POOCAPIResponse {
 #[derive(Deserialize, Debug, Default)]
 struct POMessage {
     id: i64,
-    title: String,
+    title: Option<String>,
     message: String,
     icon: String,
     priority: i64,
@@ -345,13 +345,14 @@ impl Secrets {
 const WS_URL: &str = "wss://client.pushover.net/push";
 
 async fn display_message(state: &AppState<'_>, message: &POMessage) -> Result<()> {
+    let title = message.title.clone().unwrap_or("<blank>".to_string());
     if message.priority < 0 {
-        println!("{}: {}", message.title, message.message);
+        println!("{}: {}", &title, message.message);
         return Ok(());
     }
 
     Notification::new()
-        .summary(&message.title)
+        .summary(&title)
         .body(&message.message)
         .icon(&state.get_icon(&message.icon).await?)
         .show_async()
