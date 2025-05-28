@@ -392,6 +392,10 @@ async fn inner_loop(state: &mut AppState<'_>) -> Result<()> {
                     log::error!("Abort");
                     return Err(TsunaLoopError::Abort().into());
                 }
+                "R" => {
+                    log::debug!("Reconnect Request, exiting inner loop");
+                    return Err(TsunaLoopError::Error().into());
+                }
                 "#" => {
                     log::debug!("[{:?}], Keepalive", std::time::SystemTime::now());
                 }
