@@ -374,6 +374,7 @@ async fn inner_loop(state: &mut AppState<'_>) -> Result<()> {
     loop {
         if let Some(Ok(message)) = timeout(std::time::Duration::from_secs(95), read.next()).await? {
             let text = message.to_text()?;
+            log::debug!("Received: {}", text);
             match text {
                 "!" => {
                     while let Some(m) = state.download_messages().await? {
