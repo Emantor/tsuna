@@ -10,6 +10,7 @@ use clap::{Parser, Subcommand};
 
 use async_tungstenite::tokio::connect_async;
 use async_tungstenite::tungstenite::protocol::Message;
+use async_tungstenite::tungstenite::protocol::frame::Utf8Bytes;
 use futures::prelude::*;
 use tokio::time::{sleep, timeout};
 
@@ -363,7 +364,7 @@ async fn display_message(state: &AppState<'_>, message: &POMessage) -> Result<()
 async fn inner_loop(state: &mut AppState<'_>) -> Result<()> {
     let (mut ws_stream, _) = connect_async(WS_URL).await?;
     let secrets = state.secrets.context("No secrets loaded from backend")?;
-    let login_text = format!("login:{}:{}\n", secrets.device_id, secrets.secret);
+    let login_text = Utf8Bytes::from(format!("login:{}:{}\n", secrets.device_id, secrets.secret));
 
     ws_stream.send(Message::Text(login_text)).await?;
 
