@@ -378,12 +378,14 @@ async fn inner_loop(state: &mut AppState<'_>) -> Result<()> {
             log::debug!("Received: {}", text);
             match text {
                 "!" => {
+                    log::debug!("Starting message display");
                     while let Some(m) = state.download_messages().await? {
                         for message in &m {
                             display_message(state, message).await?;
                         }
                         state.delete_messages(&m).await?;
                     }
+                    log::debug!("Message display done.");
                 }
                 "E" => {
                     log::error!("Received an error from upstream, should reconnect");
@@ -414,14 +416,20 @@ async fn run_loop(state: &mut AppState<'_>) -> Result<()> {
                 continue;
             }
             Err(ref e) if e.is::<std::io::Error>() => {
+                log::info!("Got IO Error {}, sleeping", e);
                 sleep(state.backoff_time).await;
+                log::info!("Incrementing backoff");
                 state.increment_backoff();
+                log::info!("Continuing");
                 continue;
             }
             Err(e) if e.is::<TsunaLoopError>() => match e.downcast_ref::<TsunaLoopError>() {
                 Some(inner) => match inner {
                     TsunaLoopError::Abort() => return Err(e),
-                    TsunaLoopError::Error() => continue,
+                    TsunaLoopError::Error() => {
+                        log::info!("TsunaLoopError {}, continuing", e);
+                        continue;
+                    },
                 },
                 None => return Err(e),
             },
