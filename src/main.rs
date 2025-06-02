@@ -370,10 +370,8 @@ async fn inner_loop(state: &mut AppState<'_>) -> Result<()> {
 
     state.reset_backoff();
 
-    let (_write, mut read) = ws_stream.split();
-
     loop {
-        if let Some(Ok(message)) = timeout(std::time::Duration::from_secs(95), read.next()).await? {
+        if let Some(Ok(message)) = timeout(std::time::Duration::from_secs(95), ws_stream.next()).await? {
             let text = message.to_text()?;
             log::debug!("Received: {}", text);
             match text {
