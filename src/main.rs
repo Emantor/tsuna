@@ -444,6 +444,7 @@ async fn run_loop(state: &mut AppState<'_>) -> Result<()> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    console_subscriber::init();
     env_logger::init();
     let args = Cli::parse();
 

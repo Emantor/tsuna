@@ -9,7 +9,7 @@ keywords = ["pushover", "client"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1", features = ["full", "tracing"] }
 zbus = { version = "4", default-features = false, features = ["tokio"] }
 notify-rust = { version = "4", features = ["async"] }
 log = "0.4.17"
@@ -25,6 +25,7 @@ futures = "0.3"
 serde = { version = "1.0", features = ["derive"] }
 oo7 = { version = "0.3", default-features = false, features = [ "tokio", "openssl_crypto" ] }
 xdg = "^2"
+console-subscriber = "^0.4"
 
 [profile.release]
 lto = true
