@@ -21,11 +21,11 @@ rpassword = "7.0"
 anyhow = "1.0"
 async-tungstenite = { version = "*", features = [ "tokio-native-tls" ] }
 serde_json = "1.0"
-futures = "0.3"
 serde = { version = "1.0", features = ["derive"] }
-oo7 = { version = "0.3", default-features = false, features = [ "tokio", "openssl_crypto" ] }
+oo7 = { version = "^0.4", default-features = false, features = [ "tokio", "openssl_crypto" ] }
 xdg = "^2"
 console-subscriber = "^0.4"
+tokio-stream = "0.1.17"
 
 [profile.release]
 lto = true

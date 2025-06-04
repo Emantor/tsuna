@@ -11,8 +11,8 @@ use clap::{Parser, Subcommand};
 use async_tungstenite::tokio::connect_async;
 use async_tungstenite::tungstenite::protocol::Message;
 use async_tungstenite::tungstenite::protocol::frame::Utf8Bytes;
-use futures::prelude::*;
 use tokio::time::{sleep, timeout};
+use tokio_stream::StreamExt;
 
 use thiserror::Error;
 
@@ -292,7 +292,7 @@ impl Secrets {
             return Ok(None);
         }
         Ok(Some(
-            std::str::from_utf8(items[0].secret().await?.as_slice())?.to_string(),
+            std::str::from_utf8(items[0].secret().await?.as_bytes())?.to_string(),
         ))
     }
 
