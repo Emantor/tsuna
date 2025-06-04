@@ -26,6 +26,8 @@ static APP_USER_AGENT: &str = concat!(
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Cli {
+    #[arg(short, long, default_value_t = false)]
+    tokio_console: bool,
     #[command(subcommand)]
     command: Commands,
 }
@@ -444,9 +446,13 @@ async fn run_loop(state: &mut AppState<'_>) -> Result<()> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    console_subscriber::init();
     env_logger::init();
     let args = Cli::parse();
+
+    if args.tokio_console {
+        eprintln!("Starting console-subscriber");
+        console_subscriber::init();
+    }
 
     let mut secrets = Secrets::new().await?;
 
