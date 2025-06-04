@@ -243,12 +243,12 @@ impl AppState<'_> {
 
     async fn get_icon(&self, icon: &str) -> Result<String> {
         let path = self.xdg_dirs.get_cache_file(format!("{icon}.png"));
-        match path.exists() {
-            true => Ok(path
+        match path {
+            Some(p) => Ok(p
                 .into_os_string()
                 .into_string()
                 .expect("Path conv failed")),
-            false => self.fetch_icon(icon).await,
+            None => self.fetch_icon(icon).await,
         }
     }
 
@@ -456,7 +456,7 @@ async fn main() -> Result<()> {
             .build()?,
         secrets: None,
         backoff_time: Duration::from_secs(10),
-        xdg_dirs: xdg::BaseDirectories::with_prefix("tsuna")?,
+        xdg_dirs: xdg::BaseDirectories::with_prefix("tsuna"),
     };
 
     if args.command == Commands::Register {
