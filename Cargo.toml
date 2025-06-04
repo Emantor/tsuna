@@ -25,7 +25,7 @@ serde = { version = "1.0", features = ["derive"] }
 oo7 = { version = "^0.4", default-features = false, features = [ "tokio", "openssl_crypto" ] }
 xdg = "^2"
 console-subscriber = "^0.4"
-tokio-stream = "0.1.17"
+tokio-stream = "^0.1"
 
 [profile.release]
 lto = true
