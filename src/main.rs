@@ -10,8 +10,9 @@ use clap::{Parser, Subcommand};
 
 use async_tungstenite::tokio::connect_async;
 use async_tungstenite::tungstenite::protocol::Message;
-use futures::prelude::*;
+use async_tungstenite::tungstenite::protocol::frame::Utf8Bytes;
 use tokio::time::{sleep, timeout};
+use tokio_stream::StreamExt;
 
 use thiserror::Error;
 
@@ -25,6 +26,8 @@ static APP_USER_AGENT: &str = concat!(
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Cli {
+    #[arg(short, long, default_value_t = false)]
+    tokio_console: bool,
     #[command(subcommand)]
     command: Commands,
 }
@@ -167,7 +170,7 @@ impl AppState<'_> {
         params.insert("name", name);
 
         let req = client.post(devices_url).form(&params);
-        log::debug!("Sending request: {:?}", req);
+        log::debug!("Sending request: {req:?}");
         let res = req.send().await?;
         let status = res.status();
         let json: POOCAPIResponse = res.json().await?;
@@ -242,12 +245,12 @@ impl AppState<'_> {
 
     async fn get_icon(&self, icon: &str) -> Result<String> {
         let path = self.xdg_dirs.get_cache_file(format!("{icon}.png"));
-        match path.exists() {
-            true => Ok(path
+        match path {
+            Some(p) => Ok(p
                 .into_os_string()
                 .into_string()
                 .expect("Path conv failed")),
-            false => self.fetch_icon(icon).await,
+            None => self.fetch_icon(icon).await,
         }
     }
 
@@ -291,7 +294,7 @@ impl Secrets {
             return Ok(None);
         }
         Ok(Some(
-            std::str::from_utf8(items[0].secret().await?.as_slice())?.to_string(),
+            std::str::from_utf8(items[0].secret().await?.as_bytes())?.to_string(),
         ))
     }
 
@@ -363,25 +366,26 @@ async fn display_message(state: &AppState<'_>, message: &POMessage) -> Result<()
 async fn inner_loop(state: &mut AppState<'_>) -> Result<()> {
     let (mut ws_stream, _) = connect_async(WS_URL).await?;
     let secrets = state.secrets.context("No secrets loaded from backend")?;
-    let login_text = format!("login:{}:{}\n", secrets.device_id, secrets.secret);
+    let login_text = Utf8Bytes::from(format!("login:{}:{}\n", secrets.device_id, secrets.secret));
 
     ws_stream.send(Message::Text(login_text)).await?;
 
     state.reset_backoff();
 
-    let (_write, mut read) = ws_stream.split();
-
     loop {
-        if let Some(Ok(message)) = timeout(std::time::Duration::from_secs(95), read.next()).await? {
+        if let Some(Ok(message)) = timeout(tokio::time::Duration::from_secs(95), ws_stream.next()).await? {
             let text = message.to_text()?;
+            log::debug!("Received: {text}");
             match text {
                 "!" => {
+                    log::debug!("Starting message display");
                     while let Some(m) = state.download_messages().await? {
                         for message in &m {
                             display_message(state, message).await?;
                         }
                         state.delete_messages(&m).await?;
                     }
+                    log::debug!("Message display done.");
                 }
                 "E" => {
                     log::error!("Received an error from upstream, should reconnect");
@@ -390,6 +394,10 @@ async fn inner_loop(state: &mut AppState<'_>) -> Result<()> {
                 "A" => {
                     log::error!("Abort");
                     return Err(TsunaLoopError::Abort().into());
+                }
+                "R" => {
+                    log::debug!("Reconnect Request, exiting inner loop");
+                    return Err(TsunaLoopError::Error().into());
                 }
                 "#" => {
                     log::debug!("[{:?}], Keepalive", std::time::SystemTime::now());
@@ -408,20 +416,26 @@ async fn run_loop(state: &mut AppState<'_>) -> Result<()> {
                 continue;
             }
             Err(ref e) if e.is::<std::io::Error>() => {
+                log::info!("Got IO Error {e}, sleeping");
                 sleep(state.backoff_time).await;
+                log::info!("Incrementing backoff");
                 state.increment_backoff();
+                log::info!("Continuing");
                 continue;
             }
             Err(e) if e.is::<TsunaLoopError>() => match e.downcast_ref::<TsunaLoopError>() {
                 Some(inner) => match inner {
                     TsunaLoopError::Abort() => return Err(e),
-                    TsunaLoopError::Error() => continue,
+                    TsunaLoopError::Error() => {
+                        log::info!("TsunaLoopError {e}, continuing");
+                        continue;
+                    },
                 },
                 None => return Err(e),
             },
             Ok(o) => return Ok(o),
             Err(e) => {
-                log::info!("Got unhandled Error: {:?}, continuing", e);
+                log::info!("Got unhandled Error: {e:?}, continuing");
                 sleep(state.backoff_time).await;
                 state.increment_backoff();
                 continue;
@@ -435,6 +449,11 @@ async fn main() -> Result<()> {
     env_logger::init();
     let args = Cli::parse();
 
+    if args.tokio_console {
+        eprintln!("Starting console-subscriber");
+        console_subscriber::init();
+    }
+
     let mut secrets = Secrets::new().await?;
 
     let mut state = AppState {
@@ -443,7 +462,7 @@ async fn main() -> Result<()> {
             .build()?,
         secrets: None,
         backoff_time: Duration::from_secs(10),
-        xdg_dirs: xdg::BaseDirectories::with_prefix("tsuna")?,
+        xdg_dirs: xdg::BaseDirectories::with_prefix("tsuna"),
     };
 
     if args.command == Commands::Register {
