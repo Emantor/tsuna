@@ -170,7 +170,7 @@ impl AppState<'_> {
         params.insert("name", name);
 
         let req = client.post(devices_url).form(&params);
-        log::debug!("Sending request: {:?}", req);
+        log::debug!("Sending request: {req:?}");
         let res = req.send().await?;
         let status = res.status();
         let json: POOCAPIResponse = res.json().await?;
@@ -375,7 +375,7 @@ async fn inner_loop(state: &mut AppState<'_>) -> Result<()> {
     loop {
         if let Some(Ok(message)) = timeout(tokio::time::Duration::from_secs(95), ws_stream.next()).await? {
             let text = message.to_text()?;
-            log::debug!("Received: {}", text);
+            log::debug!("Received: {text}");
             match text {
                 "!" => {
                     log::debug!("Starting message display");
@@ -416,7 +416,7 @@ async fn run_loop(state: &mut AppState<'_>) -> Result<()> {
                 continue;
             }
             Err(ref e) if e.is::<std::io::Error>() => {
-                log::info!("Got IO Error {}, sleeping", e);
+                log::info!("Got IO Error {e}, sleeping");
                 sleep(state.backoff_time).await;
                 log::info!("Incrementing backoff");
                 state.increment_backoff();
@@ -427,7 +427,7 @@ async fn run_loop(state: &mut AppState<'_>) -> Result<()> {
                 Some(inner) => match inner {
                     TsunaLoopError::Abort() => return Err(e),
                     TsunaLoopError::Error() => {
-                        log::info!("TsunaLoopError {}, continuing", e);
+                        log::info!("TsunaLoopError {e}, continuing");
                         continue;
                     },
                 },
@@ -435,7 +435,7 @@ async fn run_loop(state: &mut AppState<'_>) -> Result<()> {
             },
             Ok(o) => return Ok(o),
             Err(e) => {
-                log::info!("Got unhandled Error: {:?}, continuing", e);
+                log::info!("Got unhandled Error: {e:?}, continuing");
                 sleep(state.backoff_time).await;
                 state.increment_backoff();
                 continue;
