@@ -373,36 +373,43 @@ async fn inner_loop(state: &mut AppState<'_>) -> Result<()> {
     state.reset_backoff();
 
     loop {
-        if let Some(Ok(message)) = timeout(tokio::time::Duration::from_secs(95), ws_stream.next()).await? {
-            let text = message.to_text()?;
-            log::debug!("Received: {text}");
-            match text {
-                "!" => {
-                    log::debug!("Starting message display");
-                    while let Some(m) = state.download_messages().await? {
-                        for message in &m {
-                            display_message(state, message).await?;
+        match timeout(tokio::time::Duration::from_secs(95), ws_stream.next()).await? {
+            Some(message) => {
+                let res = message?;
+                let text = res.to_text()?;
+                log::debug!("Received: {text}");
+                match text {
+                    "!" => {
+                        log::debug!("Starting message display");
+                        while let Some(m) = state.download_messages().await? {
+                            for message in &m {
+                                display_message(state, message).await?;
+                            }
+                            state.delete_messages(&m).await?;
                         }
-                        state.delete_messages(&m).await?;
+                        log::debug!("Message display done.");
                     }
-                    log::debug!("Message display done.");
+                    "E" => {
+                        log::error!("Received an error from upstream, should reconnect");
+                        return Err(TsunaLoopError::Error().into());
+                    }
+                    "A" => {
+                        log::error!("Abort");
+                        return Err(TsunaLoopError::Abort().into());
+                    }
+                    "R" => {
+                        log::debug!("Reconnect Request, exiting inner loop");
+                        return Err(TsunaLoopError::Error().into());
+                    }
+                    "#" => {
+                        log::debug!("[{:?}], Keepalive", std::time::SystemTime::now());
+                    }
+                    _ => {}
                 }
-                "E" => {
-                    log::error!("Received an error from upstream, should reconnect");
-                    return Err(TsunaLoopError::Error().into());
-                }
-                "A" => {
-                    log::error!("Abort");
-                    return Err(TsunaLoopError::Abort().into());
-                }
-                "R" => {
-                    log::debug!("Reconnect Request, exiting inner loop");
-                    return Err(TsunaLoopError::Error().into());
-                }
-                "#" => {
-                    log::debug!("[{:?}], Keepalive", std::time::SystemTime::now());
-                }
-                _ => {}
+            }
+            None => {
+                log::debug!("Read None from stream, triggering reconnect");
+                return Err(TsunaLoopError::Error().into());
             }
         }
     }
