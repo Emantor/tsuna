@@ -404,7 +404,10 @@ async fn inner_loop(state: &mut AppState<'_>) -> Result<()> {
                     "#" => {
                         log::debug!("[{:?}], Keepalive", std::time::SystemTime::now());
                     }
-                    _ => {}
+                    _ => {
+                        log::error!("Unsupported Message received: {text}");
+                        return Err(TsunaLoopError::Abort().into());
+                    }
                 }
             }
             None => {
